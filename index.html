@@ -136,6 +136,7 @@
 <div id="cartView" class="page hidden">
   <h1>Ваш заказ</h1>
   <div class="box" id="cartList"></div>
+  <button class="link" id="backToMenu" style="margin: -6px 0 6px">⬅️ Вернуться в меню</button>
 
   <div class="label">Как оформить</div>
   <div class="box" style="padding-bottom: 12px">
@@ -485,6 +486,7 @@ $('tableNo').addEventListener('input', e => {
   update();
 });
 $('backToCart').addEventListener('click', () => show('cart'));
+$('backToMenu').addEventListener('click', () => show('menu'));
 
 load().catch(err => {
   $('sections').innerHTML = `<div class="empty">Не удалось загрузить меню 😔<br><small>${esc(err.message)}</small></div>`;
