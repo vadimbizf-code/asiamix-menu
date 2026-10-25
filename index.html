@@ -198,6 +198,8 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
 const haptic = () => { try { tg.HapticFeedback.selectionChanged(); } catch (e) {} };
 
 let menu, items = {};
+let relayed = false;  // заказ уже ушёл через ntfy — «Понятно» просто закрывает приложение
+const guestToken = new URLSearchParams(location.search).get('t') || '';
 let cart = {};
 let order = { mode: 'cafe', dest: 'pickup', arrive: '', room: '', table: '' };
 let view = 'menu';
@@ -207,7 +209,8 @@ try {
   if (localStorage.getItem('asiamix-sent')) { localStorage.removeItem('asiamix-sent'); localStorage.removeItem('asiamix-cart'); }
   cart = JSON.parse(localStorage.getItem('asiamix-cart') || '{}');
 } catch (e) {}
-const save = () => { try { localStorage.setItem('asiamix-cart', JSON.stringify(cart)); } catch (e) {} };
+// Отправленный заказ в корзине не храним (экран «Официант подойдёт» показывает его из памяти)
+const save = () => { try { localStorage.setItem('asiamix-cart', JSON.stringify(relayed ? {} : cart)); } catch (e) {} };
 
 const EMOJI = ['🍣', '🍜', '🍛', '🥟', '🍹', '🥢', '🍤', '🍱'];
 
@@ -329,7 +332,7 @@ function show(next) {
     $('doneTable').textContent = `Столик № ${order.table}`;
   }
   // На экране «Официант подойдёт» заказ ещё не отправлен — не даём закрыть приложение случайно
-  try { view === 'done' ? tg.enableClosingConfirmation() : tg.disableClosingConfirmation(); } catch (e) {}
+  try { view === 'done' && !relayed ? tg.enableClosingConfirmation() : tg.disableClosingConfirmation(); } catch (e) {}
   if (tg && tg.BackButton) view === 'menu' ? tg.BackButton.hide() : tg.BackButton.show();
   window.scrollTo(0, 0);
   update();
@@ -339,7 +342,13 @@ function say(text) {
   try { tg.showAlert(text); } catch (e) { alert(text); }
 }
 
-function back() { show(view === 'done' ? 'waiter' : view === 'waiter' ? 'cart' : 'menu'); }
+function back() {
+  if (view === 'done' && relayed) {  // заказ уже отправлен — начинаем новый, а не отправляем этот ещё раз
+    cart = {}; relayed = false; order.table = ''; $('tableNo').value = '';
+    return show('menu');
+  }
+  show(view === 'done' ? 'waiter' : view === 'waiter' ? 'cart' : 'menu');
+}
 if (tg && tg.BackButton) tg.BackButton.onClick(back);
 
 // Плюс/минус в меню и корзине
@@ -439,7 +448,10 @@ $('roomChips').addEventListener('click', e => {
 $('mainBtn').addEventListener('click', () => {
   if (view === 'menu') return show('cart');
   if (view === 'waiter') return sendTableOrder();
-  if (view === 'done') return sendOrder({ v: 2, items: Object.fromEntries(sortedCart()), place: 'table', table: order.table });
+  if (view === 'done') {
+    if (relayed) { cart = {}; save(); try { tg.close(); } catch (e) {} return; }
+    return sendOrder({ v: 2, items: Object.fromEntries(sortedCart()), place: 'table', table: order.table });
+  }
   if (order.mode === 'cafe' || !menu.online_payment) return show('waiter');
   const need = missing();
   if (need) {  // подсказываем, что не выбрано
@@ -461,8 +473,45 @@ function sendTableOrder() {
     el.focus();
     return;
   }
-  if (cannotSend()) return;
-  show('done');  // экран «Официант подойдёт»; заказ уйдёт по кнопке «Понятно» (sendData закрывает приложение)
+  const payload = { v: 2, items: Object.fromEntries(sortedCart()), place: 'table', table: order.table };
+  const btn = $('mainBtn');
+  btn.disabled = true;
+  $('mainLeft').textContent = '⏳ Отправляем…';
+  relayOrder(payload).then(ok => {
+    btn.disabled = false;
+    relayed = ok;
+    if (ok) {  // заказ уже у официанта, экран остаётся открытым
+      return show('done');
+    }
+    // Мгновенная отправка недоступна — по-старому: экран, а заказ уйдёт по «Понятно» (sendData закроет приложение)
+    if (cannotSend()) return update();
+    show('done');
+  });
+}
+
+// Мгновенная отправка: шифруем заказ открытым ключом бота и публикуем в топик ntfy (см. relay.py)
+async function relayOrder(payload) {
+  if (!menu.relay || !guestToken || !window.crypto || !crypto.subtle) return false;
+  try {
+    const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+    const pub = await crypto.subtle.importKey('spki', Uint8Array.from(atob(menu.relay.key), c => c.charCodeAt(0)),
+                                              { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
+    const aes = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const nonce = b64(crypto.getRandomValues(new Uint8Array(12)));
+    const plain = new TextEncoder().encode(JSON.stringify({ ...payload, t: guestToken, n: nonce }));
+    const body = JSON.stringify({
+      k: b64(await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, pub, await crypto.subtle.exportKey('raw', aes))),
+      iv: b64(iv),
+      d: b64(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aes, plain)),
+    });
+    const ctl = new AbortController();
+    setTimeout(() => ctl.abort(), 8000);
+    const resp = await fetch('https://ntfy.sh/' + encodeURIComponent(menu.relay.topic), { method: 'POST', body, signal: ctl.signal });
+    return resp.ok;
+  } catch (e) {
+    return false;
+  }
 }
 
 function cannotSend() {

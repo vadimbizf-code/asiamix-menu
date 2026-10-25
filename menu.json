@@ -148,5 +148,9 @@
   "Через 1 час",
   "Через 2 часа"
  ],
- "online_payment": false
+ "online_payment": false,
+ "relay": {
+  "topic": "asiamix-34SUKUwGtvl8-IsNRkbcTlglaU0Y08lF",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnmUwu5og0TEwrAY/zeOCG+aOd5aeK1RkHl3vDyvRxsvp0hqyxNDlR/JL7Nln+kWbAqeEqI0+L4EdFLGoA9s3oQfdC2E6yJElt1bX7wXiK22ihoqe2EEl5paWVfyXNS7s8fo7QiwZlG7cwg7Q3GoCgGr8JDnPMzbiXpJGbESE4aoCPhsyinF8wKsD2WxLobnUk7lIzu4Tq2HtnLgEtK5xkwftsBUgFqqsaS/4YRbFjfS7BgQKusbpZaNMeM8PZsRhi5l+GyaUD2efgOTMQA9Iaguf+DHRoVvYsT0txPcpawzH4JHo9cXaMl+NCyAJ+ScRVk7KXbi9aUWNUzumFzAIHwIDAQAB"
+ }
 }
