@@ -81,6 +81,7 @@
   .bar button { width: 100%; display: flex; justify-content: space-between; align-items: center;
     background: var(--accent); color: var(--accent-text); border-radius: 14px; padding: 15px 18px;
     font-weight: 600; font-size: 16px; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+  .bar button.center { justify-content: center; }
   .bar button:disabled { background: var(--card); color: var(--hint); box-shadow: none; }
 
   /* Корзина */
@@ -295,6 +296,7 @@ function update() {
     $('mainRight').textContent = '';
     btn.disabled = false;
   }
+  btn.classList.toggle('center', !$('mainRight').textContent);  // одна надпись — по центру («Понятно»)
   save();
 }
 
