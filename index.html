@@ -101,6 +101,8 @@
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
   .chips button { padding: 10px 16px; border-radius: 12px; background: var(--bg2); font-weight: 600; }
   .chips button.on { background: var(--accent); color: var(--accent-text); }
+  .shake { animation: shake .4s; outline: 2px solid var(--accent); }
+  @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
   .link { display: block; width: 100%; text-align: center; padding: 14px; color: var(--accent); font-weight: 600; }
 
   /* Экран для официанта */
@@ -149,7 +151,10 @@
 
 <script>
 const tg = window.Telegram && Telegram.WebApp;
-const inTelegram = !!(tg && tg.initData);
+// initData бывает пустым при запуске с кнопки клавиатуры, поэтому проверяем платформу
+const inTelegram = !!(tg && tg.platform && tg.platform !== 'unknown');
+// query_id есть только при запуске НЕ с кнопки клавиатуры — тогда sendData не работает
+const canSend = inTelegram && !(tg.initDataUnsafe && tg.initDataUnsafe.query_id);
 if (tg) { tg.ready(); tg.expand(); }
 if (inTelegram) document.documentElement.classList.add('tg');
 
@@ -163,7 +168,11 @@ let cart = {};
 let place = { type: 'table', no: '' };
 let view = 'menu';
 
-try { cart = JSON.parse(localStorage.getItem('asiamix-cart') || '{}'); } catch (e) {}
+try {
+  // Заказ ушёл (приложение закрылось после sendData) — начинаем с пустой корзины
+  if (localStorage.getItem('asiamix-sent')) { localStorage.removeItem('asiamix-sent'); localStorage.removeItem('asiamix-cart'); }
+  cart = JSON.parse(localStorage.getItem('asiamix-cart') || '{}');
+} catch (e) {}
 const save = () => { try { localStorage.setItem('asiamix-cart', JSON.stringify(cart)); } catch (e) {} };
 
 const EMOJI = ['🍣', '🍜', '🍛', '🥟', '🍹', '🥢', '🍤', '🍱'];
@@ -226,9 +235,11 @@ function update() {
     btn.disabled = !count;
   } else if (view === 'cart') {
     renderCart();
-    $('mainLeft').textContent = inTelegram ? '📤 Отправить заказ' : '📤 Отправить (только в Telegram)';
+    $('mainLeft').textContent = !place.no
+      ? (place.type === 'table' ? '✏️ Укажите номер столика' : '🏨 Выберите номер')
+      : '📤 Отправить заказ';
     $('mainRight').textContent = rub(sum);
-    btn.disabled = !count || !place.no;
+    btn.disabled = !count;
   } else {
     $('mainLeft').textContent = '⬅️ Вернуться к заказу';
     $('mainRight').textContent = '';
@@ -261,6 +272,10 @@ function show(next) {
   if (tg && tg.BackButton) view === 'menu' ? tg.BackButton.hide() : tg.BackButton.show();
   window.scrollTo(0, 0);
   update();
+}
+
+function say(text) {
+  try { tg.showAlert(text); } catch (e) { alert(text); }
 }
 
 function back() { show(view === 'waiter' ? 'cart' : 'menu'); }
@@ -342,10 +357,26 @@ $('toWaiter').addEventListener('click', () => show('waiter'));
 $('mainBtn').addEventListener('click', () => {
   if (view === 'menu') return show('cart');
   if (view === 'waiter') return show('cart');
-  if (!inTelegram) { alert('Отправка работает только внутри Telegram'); return; }
+  if (!place.no) {  // подсказываем, что не заполнено
+    try { tg.HapticFeedback.notificationOccurred('error'); } catch (e) {}
+    const el = place.type === 'table' ? $('tableNo') : $('roomChips');
+    el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
+    if (place.type === 'table') $('tableNo').focus();
+    return;
+  }
+  if (!canSend) {
+    say(inTelegram
+      ? 'Чтобы отправить заказ, откройте меню кнопкой «📱 Открыть меню» внизу чата с ботом. А пока можно показать заказ официанту.'
+      : 'Отправка работает только внутри Telegram. Можно показать заказ официанту.');
+    return show('waiter');
+  }
   const order = { v: 1, items: Object.fromEntries(sortedCart()), place: place.type, place_no: place.no };
-  cart = {}; save();
-  tg.sendData(JSON.stringify(order));  // бот получит заказ и закроет приложение
+  try { localStorage.setItem('asiamix-sent', '1'); } catch (e) {}
+  tg.sendData(JSON.stringify(order));  // бот получит заказ, Telegram закроет приложение
+  setTimeout(() => {  // если приложение не закрылось — заказ не ушёл, корзину не трогаем
+    try { localStorage.removeItem('asiamix-sent'); } catch (e) {}
+    say('Не получилось отправить заказ 😔 Закройте меню и откройте его снова кнопкой «📱 Открыть меню» внизу чата.');
+  }, 2500);
 });
 
 load().catch(err => {
