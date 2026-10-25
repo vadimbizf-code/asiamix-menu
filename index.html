@@ -107,7 +107,10 @@
   .note b { color: var(--text); }
   .mini { font-size: 13px; color: var(--hint); margin: 4px 2px 8px; }
   .tablebox { padding: 12px 14px 2px; }
-  .confirm { font-size: 17px; line-height: 1.4; margin: 6px 4px 4px; }
+  .done-head { text-align: center; padding: 28px 8px 22px; }
+  .done-icon { font-size: 56px; line-height: 1; margin-bottom: 14px; }
+  .done-title { font-size: 30px !important; line-height: 1.2; font-weight: 800; margin: 0 0 12px !important; }
+  .done-table { color: var(--hint); font-size: 17px; }
   .seg button.off { opacity: .45; }
   .shake { animation: shake .4s; outline: 2px solid var(--accent); }
   @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
@@ -160,8 +163,16 @@
   <div class="box tablebox">
     <input id="tableNo" class="field" type="number" inputmode="numeric" placeholder="Номер столика (есть на столе)">
   </div>
-  <p class="confirm"><b>Официант сейчас подойдёт к вам для подтверждения заказа.</b></p>
   <button class="link" id="backToCart">⬅️ Изменить заказ</button>
+</div>
+
+<div id="doneView" class="page hidden">
+  <div class="done-head">
+    <div class="done-icon">🤵</div>
+    <h1 class="done-title">Официант подойдёт к вам для подтверждения заказа</h1>
+    <div class="done-table" id="doneTable"></div>
+  </div>
+  <div class="box" id="doneList"></div>
 </div>
 
 <div class="bar"><button id="mainBtn"><span id="mainLeft"></span><span id="mainRight"></span></button></div>
@@ -270,9 +281,13 @@ function update() {
       : '💳 Оплатить';
     $('mainRight').textContent = rub(sum);
     btn.disabled = !count;
-  } else {
+  } else if (view === 'waiter') {
     $('mainLeft').textContent = order.table ? '📤 Оформить заказ' : '✏️ Укажите номер столика';
     $('mainRight').textContent = rub(sum);
+    btn.disabled = false;
+  } else {
+    $('mainLeft').textContent = '👌 Понятно';
+    $('mainRight').textContent = '';
     btn.disabled = false;
   }
   save();
@@ -288,18 +303,26 @@ function renderCart() {
   }).join('') + `<div class="row total"><span>Итого</span><span>${rub(totals().sum)}</span></div>`;
 }
 
+function orderListHtml() {
+  return sortedCart().map(([c, q]) => `<div class="row"><div class="grow">
+      <div class="name">№${c} ${esc(items[c].name)}</div><div class="sub">× ${q}</div></div>
+      <b>${rub(items[c].price * q)}</b></div>`).join('')
+    + `<div class="row total"><span>Итого</span><span>${rub(totals().sum)}</span></div>`;
+}
+
 function show(next) {
   view = next;
   $('menuView').classList.toggle('hidden', view !== 'menu');
   $('cartView').classList.toggle('hidden', view !== 'cart');
   $('waiterView').classList.toggle('hidden', view !== 'waiter');
-  if (view === 'waiter') {
-    const rows = sortedCart();
-    $('waiterList').innerHTML = rows.map(([c, q]) => `<div class="row"><div class="grow">
-        <div class="name">№${c} ${esc(items[c].name)}</div><div class="sub">× ${q}</div></div>
-        <b>${rub(items[c].price * q)}</b></div>`).join('')
-      + `<div class="row total"><span>Итого</span><span>${rub(totals().sum)}</span></div>`;
+  $('doneView').classList.toggle('hidden', view !== 'done');
+  if (view === 'waiter') $('waiterList').innerHTML = orderListHtml();
+  if (view === 'done') {
+    $('doneList').innerHTML = orderListHtml();
+    $('doneTable').textContent = `Столик № ${order.table}`;
   }
+  // На экране «Официант подойдёт» заказ ещё не отправлен — не даём закрыть приложение случайно
+  try { view === 'done' ? tg.enableClosingConfirmation() : tg.disableClosingConfirmation(); } catch (e) {}
   if (tg && tg.BackButton) view === 'menu' ? tg.BackButton.hide() : tg.BackButton.show();
   window.scrollTo(0, 0);
   update();
@@ -309,7 +332,7 @@ function say(text) {
   try { tg.showAlert(text); } catch (e) { alert(text); }
 }
 
-function back() { show(view === 'waiter' ? 'cart' : 'menu'); }
+function back() { show(view === 'done' ? 'waiter' : view === 'waiter' ? 'cart' : 'menu'); }
 if (tg && tg.BackButton) tg.BackButton.onClick(back);
 
 // Плюс/минус в меню и корзине
@@ -409,6 +432,7 @@ $('roomChips').addEventListener('click', e => {
 $('mainBtn').addEventListener('click', () => {
   if (view === 'menu') return show('cart');
   if (view === 'waiter') return sendTableOrder();
+  if (view === 'done') return sendOrder({ v: 2, items: Object.fromEntries(sortedCart()), place: 'table', table: order.table });
   if (order.mode === 'cafe' || !menu.online_payment) return show('waiter');
   const need = missing();
   if (need) {  // подсказываем, что не выбрано
@@ -430,16 +454,21 @@ function sendTableOrder() {
     el.focus();
     return;
   }
-  sendOrder({ v: 2, items: Object.fromEntries(sortedCart()), place: 'table', table: order.table });
+  if (cannotSend()) return;
+  show('done');  // экран «Официант подойдёт»; заказ уйдёт по кнопке «Понятно» (sendData закрывает приложение)
+}
+
+function cannotSend() {
+  if (canSend) return false;
+  say(inTelegram
+    ? 'Чтобы оформить заказ, откройте меню кнопкой «📱 Открыть меню» внизу чата с ботом.'
+    : 'Оформить заказ можно только внутри Telegram.');
+  return true;
 }
 
 function sendOrder(payload) {
-  if (!canSend) {
-    say(inTelegram
-      ? 'Чтобы оформить заказ, откройте меню кнопкой «📱 Открыть меню» внизу чата с ботом.'
-      : 'Оформить заказ можно только внутри Telegram.');
-    return;
-  }
+  if (cannotSend()) return;
+  try { tg.disableClosingConfirmation(); } catch (e) {}
   try { localStorage.setItem('asiamix-sent', '1'); } catch (e) {}
   tg.sendData(JSON.stringify(payload));  // бот получит заказ, Telegram закроет приложение
   setTimeout(() => {  // если приложение не закрылось — заказ не ушёл, корзину не трогаем
