@@ -101,6 +101,11 @@
   .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
   .chips button { padding: 10px 16px; border-radius: 12px; background: var(--bg2); font-weight: 600; }
   .chips button.on { background: var(--accent); color: var(--accent-text); }
+  .note { color: var(--hint); font-size: 14px; margin: 2px 2px 12px; }
+  .note b { color: var(--text); }
+  .mini { font-size: 13px; color: var(--hint); margin: 4px 2px 8px; }
+  .hintline { color: var(--hint); margin: -10px 0 18px; }
+  .seg button.off { opacity: .45; }
   .shake { animation: shake .4s; outline: 2px solid var(--accent); }
   @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
   .link { display: block; width: 100%; text-align: center; padding: 14px; color: var(--accent); font-weight: 600; }
@@ -129,20 +134,29 @@
   <h1>Ваш заказ</h1>
   <div class="box" id="cartList"></div>
 
-  <div class="label">Куда подать</div>
-  <div class="box" style="padding-bottom: 2px">
-    <div class="seg">
-      <button data-place="table" class="on">🍽 За столик</button>
-      <button data-place="room">🏨 В номер</button>
+  <div class="label">Как оформить</div>
+  <div class="box" style="padding-bottom: 12px">
+    <div class="seg" id="modeSeg">
+      <button data-mode="cafe" class="on">🍽 Я в кафе</button>
+      <button data-mode="online">📲 Онлайн-заказ</button>
     </div>
-    <input id="tableNo" class="field" type="number" inputmode="numeric" placeholder="Номер столика (есть на столе)">
-    <div id="roomChips" class="chips hidden"></div>
+    <div id="cafeBox" class="note">Покажите этот заказ официанту — он запишет коды блюд и примет заказ.</div>
+    <div id="onlineBox" class="hidden">
+      <div class="note">Заказ уйдёт на кухню <b>после онлайн-оплаты</b>. Оплатить можно картой прямо в Telegram.</div>
+      <div class="seg" id="destSeg">
+        <button data-dest="pickup" class="on">🚶 Приеду сам</button>
+        <button data-dest="room">🏨 В номер</button>
+      </div>
+      <div id="arriveBox"><div class="mini">Когда вас ждать?</div><div id="arriveChips" class="chips"></div></div>
+      <div id="roomBox" class="hidden"><div class="mini">В какой номер принести?</div><div id="roomChips" class="chips"></div></div>
+    </div>
+    <div id="noPayBox" class="note hidden">Онлайн-оплата скоро появится 🙏 Пока приходите к нам и покажите заказ официанту.</div>
   </div>
-  <button class="link" id="toWaiter">👨‍🍳 Показать официанту вместо отправки</button>
 </div>
 
 <div id="waiterView" class="waiter hidden">
   <h1>Заказ для официанта</h1>
+  <p class="hintline">Покажите этот экран официанту</p>
   <div class="big" id="waiterCodes"></div>
   <div class="small" id="waiterList"></div>
 </div>
@@ -165,7 +179,7 @@ const haptic = () => { try { tg.HapticFeedback.selectionChanged(); } catch (e) {
 
 let menu, items = {};
 let cart = {};
-let place = { type: 'table', no: '' };
+let order = { mode: 'cafe', dest: 'pickup', arrive: '', room: '' };
 let view = 'menu';
 
 try {
@@ -215,7 +229,19 @@ function ctlHtml(code) {
 
 function renderRooms() {
   $('roomChips').innerHTML = menu.rooms.map(r => `<button data-room="${esc(r)}">№${esc(r)}</button>`).join('');
+  $('arriveChips').innerHTML = (menu.arrive || []).map(a => `<button data-arrive="${esc(a)}">${esc(a)}</button>`).join('');
+  order.arrive = (menu.arrive || [])[0] || '';
+  markChips();
+  if (!menu.online_payment) $('modeSeg').querySelector('[data-mode=online]').classList.add('off');
 }
+
+function markChips() {
+  document.querySelectorAll('#arriveChips button').forEach(x => x.classList.toggle('on', x.dataset.arrive === order.arrive));
+  document.querySelectorAll('#roomChips button').forEach(x => x.classList.toggle('on', x.dataset.room === order.room));
+}
+
+// Чего не хватает для онлайн-заказа (или null — всё готово)
+const missing = () => order.dest === 'room' ? (order.room ? null : 'room') : (order.arrive ? null : 'arrive');
 
 function totals() {
   let count = 0, sum = 0;
@@ -235,9 +261,10 @@ function update() {
     btn.disabled = !count;
   } else if (view === 'cart') {
     renderCart();
-    $('mainLeft').textContent = !place.no
-      ? (place.type === 'table' ? '✏️ Укажите номер столика' : '🏨 Выберите номер')
-      : '📤 Отправить заказ';
+    $('mainLeft').textContent = order.mode === 'cafe' ? '👨‍🍳 Показать официанту'
+      : !menu.online_payment ? '👨‍🍳 Показать официанту'
+      : missing() === 'room' ? '🏨 Выберите номер'
+      : '💳 Оплатить';
     $('mainRight').textContent = rub(sum);
     btn.disabled = !count;
   } else {
@@ -328,54 +355,61 @@ $('search').addEventListener('input', e => {
   $('tabs').classList.toggle('hidden', !!q);
 });
 
-// Куда подать
-document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
-  place = { type: b.dataset.place, no: '' };
-  document.querySelectorAll('.seg button').forEach(x => x.classList.toggle('on', x === b));
-  $('tableNo').classList.toggle('hidden', place.type !== 'table');
-  $('roomChips').classList.toggle('hidden', place.type !== 'room');
-  $('tableNo').value = '';
-  document.querySelectorAll('#roomChips button').forEach(x => x.classList.remove('on'));
+// Как оформить: в кафе / онлайн
+$('modeSeg').addEventListener('click', e => {
+  const b = e.target.closest('[data-mode]');
+  if (!b) return;
+  order.mode = b.dataset.mode;
+  $('modeSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  const online = order.mode === 'online';
+  $('cafeBox').classList.toggle('hidden', online);
+  $('onlineBox').classList.toggle('hidden', !online || !menu.online_payment);
+  $('noPayBox').classList.toggle('hidden', !online || menu.online_payment);
   update();
-}));
-$('tableNo').addEventListener('input', e => {
-  const v = e.target.value.replace(/\D/g, '').slice(0, 3);
-  place.no = v && +v > 0 ? String(+v) : '';
+});
+$('destSeg').addEventListener('click', e => {
+  const b = e.target.closest('[data-dest]');
+  if (!b) return;
+  order.dest = b.dataset.dest;
+  $('destSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  $('arriveBox').classList.toggle('hidden', order.dest !== 'pickup');
+  $('roomBox').classList.toggle('hidden', order.dest !== 'room');
   update();
+});
+$('arriveChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-arrive]');
+  if (b) { order.arrive = b.dataset.arrive; markChips(); update(); }
 });
 $('roomChips').addEventListener('click', e => {
   const b = e.target.closest('[data-room]');
-  if (!b) return;
-  place.no = b.dataset.room;
-  document.querySelectorAll('#roomChips button').forEach(x => x.classList.toggle('on', x === b));
-  update();
+  if (b) { order.room = b.dataset.room; markChips(); update(); }
 });
-
-$('toWaiter').addEventListener('click', () => show('waiter'));
 
 // Главная кнопка
 $('mainBtn').addEventListener('click', () => {
   if (view === 'menu') return show('cart');
   if (view === 'waiter') return show('cart');
-  if (!place.no) {  // подсказываем, что не заполнено
+  if (order.mode === 'cafe' || !menu.online_payment) return show('waiter');
+  const need = missing();
+  if (need) {  // подсказываем, что не выбрано
     try { tg.HapticFeedback.notificationOccurred('error'); } catch (e) {}
-    const el = place.type === 'table' ? $('tableNo') : $('roomChips');
+    const el = need === 'room' ? $('roomChips') : $('arriveChips');
     el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
-    if (place.type === 'table') $('tableNo').focus();
     return;
   }
   if (!canSend) {
     say(inTelegram
-      ? 'Чтобы отправить заказ, откройте меню кнопкой «📱 Открыть меню» внизу чата с ботом. А пока можно показать заказ официанту.'
-      : 'Отправка работает только внутри Telegram. Можно показать заказ официанту.');
-    return show('waiter');
+      ? 'Чтобы оформить онлайн-заказ, откройте меню кнопкой «📱 Открыть меню» внизу чата с ботом.'
+      : 'Онлайн-заказ работает только внутри Telegram.');
+    return;
   }
-  const order = { v: 1, items: Object.fromEntries(sortedCart()), place: place.type, place_no: place.no };
+  const payload = { v: 2, items: Object.fromEntries(sortedCart()), place: order.dest,
+                    room: order.dest === 'room' ? order.room : '', arrive: order.dest === 'pickup' ? order.arrive : '' };
   try { localStorage.setItem('asiamix-sent', '1'); } catch (e) {}
-  tg.sendData(JSON.stringify(order));  // бот получит заказ, Telegram закроет приложение
+  tg.sendData(JSON.stringify(payload));  // бот пришлёт счёт на оплату, Telegram закроет приложение
   setTimeout(() => {  // если приложение не закрылось — заказ не ушёл, корзину не трогаем
     try { localStorage.removeItem('asiamix-sent'); } catch (e) {}
-    say('Не получилось отправить заказ 😔 Закройте меню и откройте его снова кнопкой «📱 Открыть меню» внизу чата.');
+    say('Не получилось оформить заказ 😔 Закройте меню и откройте его снова кнопкой «📱 Открыть меню» внизу чата.');
   }, 2500);
 });
 
