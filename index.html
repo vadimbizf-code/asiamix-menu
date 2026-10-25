@@ -107,11 +107,6 @@
   .note b { color: var(--text); }
   .mini { font-size: 13px; color: var(--hint); margin: 4px 2px 8px; }
   .tablebox { padding: 12px 14px 2px; }
-  .done-head { text-align: center; padding: 28px 8px 22px; }
-  .done-icon { font-size: 56px; line-height: 1; margin-bottom: 14px; }
-  .done-title { font-size: 30px !important; line-height: 1.2; font-weight: 800; margin: 0 0 12px !important; }
-  .done-table { color: var(--hint); font-size: 17px; }
-  .done-hint { font-size: 21px; font-weight: 700; line-height: 1.3; color: var(--accent); margin: 0 4px 14px; }
   .seg button.off { opacity: .45; }
   .shake { animation: shake .4s; outline: 2px solid var(--accent); }
   @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
@@ -168,15 +163,6 @@
   <button class="link" id="backToCart">⬅️ Изменить заказ</button>
 </div>
 
-<div id="doneView" class="page hidden">
-  <div class="done-head">
-    <div class="done-icon">🤵</div>
-    <h1 class="done-title">Официант подойдёт к вам для подтверждения заказа</h1>
-    <p class="done-hint">Захотите что-нибудь добавить к заказу — просто скажите официанту.</p>
-    <div class="done-table" id="doneTable"></div>
-  </div>
-  <div class="box" id="doneList"></div>
-</div>
 
 <div class="bar"><button id="mainBtn"><span id="mainLeft"></span><span id="mainRight"></span></button></div>
 
@@ -284,13 +270,9 @@ function update() {
       : '💳 Оплатить';
     $('mainRight').textContent = rub(sum);
     btn.disabled = !count;
-  } else if (view === 'waiter') {
+  } else {
     $('mainLeft').textContent = order.table ? '📤 Оформить заказ' : '✏️ Укажите номер столика';
     $('mainRight').textContent = rub(sum);
-    btn.disabled = false;
-  } else {
-    $('mainLeft').textContent = '👌 Понятно';
-    $('mainRight').textContent = '';
     btn.disabled = false;
   }
   save();
@@ -318,14 +300,7 @@ function show(next) {
   $('menuView').classList.toggle('hidden', view !== 'menu');
   $('cartView').classList.toggle('hidden', view !== 'cart');
   $('waiterView').classList.toggle('hidden', view !== 'waiter');
-  $('doneView').classList.toggle('hidden', view !== 'done');
   if (view === 'waiter') $('waiterList').innerHTML = orderListHtml();
-  if (view === 'done') {
-    $('doneList').innerHTML = orderListHtml();
-    $('doneTable').textContent = `Столик № ${order.table}`;
-  }
-  // На экране «Официант подойдёт» заказ ещё не отправлен — не даём закрыть приложение случайно
-  try { view === 'done' ? tg.enableClosingConfirmation() : tg.disableClosingConfirmation(); } catch (e) {}
   if (tg && tg.BackButton) view === 'menu' ? tg.BackButton.hide() : tg.BackButton.show();
   window.scrollTo(0, 0);
   update();
@@ -335,7 +310,7 @@ function say(text) {
   try { tg.showAlert(text); } catch (e) { alert(text); }
 }
 
-function back() { show(view === 'done' ? 'waiter' : view === 'waiter' ? 'cart' : 'menu'); }
+function back() { show(view === 'waiter' ? 'cart' : 'menu'); }
 if (tg && tg.BackButton) tg.BackButton.onClick(back);
 
 // Плюс/минус в меню и корзине
@@ -435,7 +410,6 @@ $('roomChips').addEventListener('click', e => {
 $('mainBtn').addEventListener('click', () => {
   if (view === 'menu') return show('cart');
   if (view === 'waiter') return sendTableOrder();
-  if (view === 'done') return sendOrder({ v: 2, items: Object.fromEntries(sortedCart()), place: 'table', table: order.table });
   if (order.mode === 'cafe' || !menu.online_payment) return show('waiter');
   const need = missing();
   if (need) {  // подсказываем, что не выбрано
@@ -457,8 +431,8 @@ function sendTableOrder() {
     el.focus();
     return;
   }
-  if (cannotSend()) return;
-  show('done');  // экран «Официант подойдёт»; заказ уйдёт по кнопке «Понятно» (sendData закрывает приложение)
+  // Заказ уходит официантам сразу; Telegram закроет приложение, а «Официант подойдёт…» бот пришлёт в чат
+  sendOrder({ v: 2, items: Object.fromEntries(sortedCart()), place: 'table', table: order.table });
 }
 
 function cannotSend() {
@@ -471,7 +445,6 @@ function cannotSend() {
 
 function sendOrder(payload) {
   if (cannotSend()) return;
-  try { tg.disableClosingConfirmation(); } catch (e) {}
   try { localStorage.setItem('asiamix-sent', '1'); } catch (e) {}
   tg.sendData(JSON.stringify(payload));  // бот получит заказ, Telegram закроет приложение
   setTimeout(() => {  // если приложение не закрылось — заказ не ушёл, корзину не трогаем
