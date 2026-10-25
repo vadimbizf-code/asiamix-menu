@@ -115,6 +115,7 @@
   .seg button.off { opacity: .45; }
   .shake { animation: shake .4s; outline: 2px solid var(--accent); }
   @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+  .toplink { color: var(--accent); font-weight: 600; font-size: 16px; padding: 4px 4px 10px; }
   .link { display: block; width: 100%; text-align: center; padding: 14px; color: var(--accent); font-weight: 600; }
 
   /* Экран для официанта */
@@ -134,9 +135,9 @@
 </div>
 
 <div id="cartView" class="page hidden">
+  <button class="toplink" id="backToMenu">⬅️ Вернуться в меню</button>
   <h1>Ваш заказ</h1>
   <div class="box" id="cartList"></div>
-  <button class="link" id="backToMenu" style="margin: -6px 0 6px">⬅️ Вернуться в меню</button>
 
   <div class="label">Как оформить</div>
   <div class="box" style="padding-bottom: 12px">
