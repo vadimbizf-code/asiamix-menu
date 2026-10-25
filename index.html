@@ -106,18 +106,14 @@
   .note { color: var(--hint); font-size: 14px; margin: 2px 2px 12px; }
   .note b { color: var(--text); }
   .mini { font-size: 13px; color: var(--hint); margin: 4px 2px 8px; }
-  .hintline { color: var(--hint); margin: -10px 0 18px; }
-  .tablebox { text-align: left; margin-top: 24px; padding: 12px 14px 2px; }
+  .tablebox { padding: 12px 14px 2px; }
+  .confirm { font-size: 17px; line-height: 1.4; margin: 6px 4px 4px; }
   .seg button.off { opacity: .45; }
   .shake { animation: shake .4s; outline: 2px solid var(--accent); }
   @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
   .link { display: block; width: 100%; text-align: center; padding: 14px; color: var(--accent); font-weight: 600; }
 
   /* Экран для официанта */
-  .waiter { padding: 24px 16px; text-align: center; }
-  .waiter h1 { font-size: 20px; color: var(--hint); font-weight: 600; margin: 0 0 18px; }
-  .waiter .big { font-size: 34px; font-weight: 800; line-height: 1.5; }
-  .waiter .small { color: var(--hint); margin-top: 18px; text-align: left; }
 </style>
 </head>
 <body>
@@ -143,7 +139,7 @@
       <button data-mode="cafe" class="on">🍽 Я в кафе</button>
       <button data-mode="online">📲 Онлайн-заказ</button>
     </div>
-    <div id="cafeBox" class="note">Покажите этот заказ официанту — он запишет коды блюд и примет заказ.</div>
+    <div id="cafeBox" class="note">Укажите номер столика на следующем шаге — официант подойдёт подтвердить заказ.</div>
     <div id="onlineBox" class="hidden">
       <div class="note">Заказ уйдёт на кухню <b>после онлайн-оплаты</b>. Оплатить можно картой прямо в Telegram.</div>
       <div class="seg" id="destSeg">
@@ -157,15 +153,14 @@
   </div>
 </div>
 
-<div id="waiterView" class="waiter hidden">
-  <h1>Заказ для официанта</h1>
-  <p class="hintline">Покажите этот экран официанту</p>
-  <div class="big" id="waiterCodes"></div>
-  <div class="small" id="waiterList"></div>
+<div id="waiterView" class="page hidden">
+  <h1>Ваш заказ</h1>
+  <div class="box" id="waiterList"></div>
+  <div class="label">Ваш столик</div>
   <div class="box tablebox">
-    <div class="mini">Чтобы официанту не записывать, оформите заказ сами — укажите столик:</div>
     <input id="tableNo" class="field" type="number" inputmode="numeric" placeholder="Номер столика (есть на столе)">
   </div>
+  <p class="confirm"><b>Официант сейчас подойдёт к вам для подтверждения заказа.</b></p>
   <button class="link" id="backToCart">⬅️ Изменить заказ</button>
 </div>
 
@@ -269,8 +264,8 @@ function update() {
     btn.disabled = !count;
   } else if (view === 'cart') {
     renderCart();
-    $('mainLeft').textContent = order.mode === 'cafe' ? '👨‍🍳 Показать официанту'
-      : !menu.online_payment ? '👨‍🍳 Показать официанту'
+    $('mainLeft').textContent = order.mode === 'cafe' ? '➡️ Далее'
+      : !menu.online_payment ? '➡️ Далее'
       : missing() === 'room' ? '🏨 Выберите номер'
       : '💳 Оплатить';
     $('mainRight').textContent = rub(sum);
@@ -300,9 +295,10 @@ function show(next) {
   $('waiterView').classList.toggle('hidden', view !== 'waiter');
   if (view === 'waiter') {
     const rows = sortedCart();
-    $('waiterCodes').innerHTML = rows.map(([c, q]) => `№${c} × ${q}`).join('<br>');
-    $('waiterList').innerHTML = rows.map(([c, q]) => `№${c} ${esc(items[c].name)} — ${rub(items[c].price * q)}`).join('<br>')
-      + `<br><b>Итого: ${rub(totals().sum)}</b>`;
+    $('waiterList').innerHTML = rows.map(([c, q]) => `<div class="row"><div class="grow">
+        <div class="name">№${c} ${esc(items[c].name)}</div><div class="sub">× ${q}</div></div>
+        <b>${rub(items[c].price * q)}</b></div>`).join('')
+      + `<div class="row total"><span>Итого</span><span>${rub(totals().sum)}</span></div>`;
   }
   if (tg && tg.BackButton) view === 'menu' ? tg.BackButton.hide() : tg.BackButton.show();
   window.scrollTo(0, 0);
