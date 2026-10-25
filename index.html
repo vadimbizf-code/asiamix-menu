@@ -107,6 +107,7 @@
   .note b { color: var(--text); }
   .mini { font-size: 13px; color: var(--hint); margin: 4px 2px 8px; }
   .hintline { color: var(--hint); margin: -10px 0 18px; }
+  .tablebox { text-align: left; margin-top: 24px; padding: 12px 14px 2px; }
   .seg button.off { opacity: .45; }
   .shake { animation: shake .4s; outline: 2px solid var(--accent); }
   @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
@@ -161,6 +162,11 @@
   <p class="hintline">Покажите этот экран официанту</p>
   <div class="big" id="waiterCodes"></div>
   <div class="small" id="waiterList"></div>
+  <div class="box tablebox">
+    <div class="mini">Чтобы официанту не записывать, оформите заказ сами — укажите столик:</div>
+    <input id="tableNo" class="field" type="number" inputmode="numeric" placeholder="Номер столика (есть на столе)">
+  </div>
+  <button class="link" id="backToCart">⬅️ Изменить заказ</button>
 </div>
 
 <div class="bar"><button id="mainBtn"><span id="mainLeft"></span><span id="mainRight"></span></button></div>
@@ -181,7 +187,7 @@ const haptic = () => { try { tg.HapticFeedback.selectionChanged(); } catch (e) {
 
 let menu, items = {};
 let cart = {};
-let order = { mode: 'cafe', dest: 'pickup', arrive: '', room: '' };
+let order = { mode: 'cafe', dest: 'pickup', arrive: '', room: '', table: '' };
 let view = 'menu';
 
 try {
@@ -270,8 +276,8 @@ function update() {
     $('mainRight').textContent = rub(sum);
     btn.disabled = !count;
   } else {
-    $('mainLeft').textContent = '⬅️ Вернуться к заказу';
-    $('mainRight').textContent = '';
+    $('mainLeft').textContent = order.table ? '📤 Оформить заказ' : '✏️ Укажите номер столика';
+    $('mainRight').textContent = rub(sum);
     btn.disabled = false;
   }
   save();
@@ -406,7 +412,7 @@ $('roomChips').addEventListener('click', e => {
 // Главная кнопка
 $('mainBtn').addEventListener('click', () => {
   if (view === 'menu') return show('cart');
-  if (view === 'waiter') return show('cart');
+  if (view === 'waiter') return sendTableOrder();
   if (order.mode === 'cafe' || !menu.online_payment) return show('waiter');
   const need = missing();
   if (need) {  // подсказываем, что не выбрано
@@ -415,21 +421,43 @@ $('mainBtn').addEventListener('click', () => {
     el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
     return;
   }
-  if (!canSend) {
-    say(inTelegram
-      ? 'Чтобы оформить онлайн-заказ, откройте меню кнопкой «📱 Открыть меню» внизу чата с ботом.'
-      : 'Онлайн-заказ работает только внутри Telegram.');
+  sendOrder({ v: 2, items: Object.fromEntries(sortedCart()), place: order.dest,
+              room: order.dest === 'room' ? order.room : '', arrive: order.dest === 'pickup' ? order.arrive : '' });
+});
+
+// Заказ из кафе (экран «для официанта»): без онлайн-оплаты, сразу официантам — нужен номер столика
+function sendTableOrder() {
+  if (!order.table) {
+    try { tg.HapticFeedback.notificationOccurred('error'); } catch (e) {}
+    const el = $('tableNo');
+    el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
+    el.focus();
     return;
   }
-  const payload = { v: 2, items: Object.fromEntries(sortedCart()), place: order.dest,
-                    room: order.dest === 'room' ? order.room : '', arrive: order.dest === 'pickup' ? order.arrive : '' };
+  sendOrder({ v: 2, items: Object.fromEntries(sortedCart()), place: 'table', table: order.table });
+}
+
+function sendOrder(payload) {
+  if (!canSend) {
+    say(inTelegram
+      ? 'Чтобы оформить заказ, откройте меню кнопкой «📱 Открыть меню» внизу чата с ботом.'
+      : 'Оформить заказ можно только внутри Telegram.');
+    return;
+  }
   try { localStorage.setItem('asiamix-sent', '1'); } catch (e) {}
-  tg.sendData(JSON.stringify(payload));  // бот пришлёт счёт на оплату, Telegram закроет приложение
+  tg.sendData(JSON.stringify(payload));  // бот получит заказ, Telegram закроет приложение
   setTimeout(() => {  // если приложение не закрылось — заказ не ушёл, корзину не трогаем
     try { localStorage.removeItem('asiamix-sent'); } catch (e) {}
     say('Не получилось оформить заказ 😔 Закройте меню и откройте его снова кнопкой «📱 Открыть меню» внизу чата.');
   }, 2500);
+}
+
+$('tableNo').addEventListener('input', e => {
+  const v = e.target.value.replace(/\D/g, '').slice(0, 3);
+  order.table = v && +v > 0 ? String(+v) : '';
+  update();
 });
+$('backToCart').addEventListener('click', () => show('cart'));
 
 load().catch(err => {
   $('sections').innerHTML = `<div class="empty">Не удалось загрузить меню 😔<br><small>${esc(err.message)}</small></div>`;
