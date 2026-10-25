@@ -115,7 +115,8 @@
   .seg button.off { opacity: .45; }
   .shake { animation: shake .4s; outline: 2px solid var(--accent); }
   @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
-  .toplink { color: var(--accent); font-weight: 600; font-size: 16px; padding: 4px 4px 10px; }
+  .secondary { display: block; width: 100%; padding: 14px; margin: -2px 0 18px; border-radius: 14px;
+    background: var(--card); color: var(--text); font-weight: 600; font-size: 16px; }
   .link { display: block; width: 100%; text-align: center; padding: 14px; color: var(--accent); font-weight: 600; }
 
   /* Экран для официанта */
@@ -135,9 +136,9 @@
 </div>
 
 <div id="cartView" class="page hidden">
-  <button class="toplink" id="backToMenu">⬅️ Вернуться в меню</button>
   <h1>Ваш заказ</h1>
   <div class="box" id="cartList"></div>
+  <button class="secondary" id="backToMenu">⬅️ Вернуться в меню</button>
 
   <div class="label">Как оформить</div>
   <div class="box" style="padding-bottom: 12px">
@@ -166,7 +167,7 @@
   <div class="box tablebox">
     <input id="tableNo" class="field" type="number" inputmode="numeric" placeholder="Номер столика (есть на столе)">
   </div>
-  <button class="link" id="backToCart">⬅️ Изменить заказ</button>
+  <button class="secondary" id="backToCart" style="margin-top: 4px">⬅️ Изменить заказ</button>
 </div>
 
 <div id="doneView" class="page hidden">
