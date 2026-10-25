@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Asia Mix</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --bg2: var(--tg-theme-secondary-bg-color, #f2f2f6);
+    --text: var(--tg-theme-text-color, #111111);
+    --hint: var(--tg-theme-hint-color, #8a8a8e);
+    --accent: var(--tg-theme-button-color, #e2483d);
+    --accent-text: var(--tg-theme-button-text-color, #ffffff);
+    --card: var(--tg-theme-section-bg-color, var(--bg));
+    --radius: 16px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not(.tg) {
+      --bg: #17181c; --bg2: #0e0f12; --text: #f3f3f5; --hint: #8d8f98; --card: #1f2126;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg2); color: var(--text);
+    font: 15px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  .hidden { display: none !important; }
+
+  /* Шапка */
+  header { padding: 18px 16px 10px; background: var(--bg); }
+  header h1 { margin: 0; font-size: 24px; letter-spacing: -.3px; }
+  header p { margin: 2px 0 12px; color: var(--hint); font-size: 13px; }
+  .search { display: flex; align-items: center; gap: 8px; background: var(--bg2);
+    border-radius: 12px; padding: 0 12px; }
+  .search input { flex: 1; border: 0; outline: 0; background: none; color: var(--text);
+    font: inherit; padding: 11px 0; }
+  .search input::placeholder { color: var(--hint); }
+
+  /* Категории */
+  nav { position: sticky; top: 0; z-index: 5; background: var(--bg);
+    display: flex; gap: 8px; overflow-x: auto; padding: 8px 16px 12px; scrollbar-width: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--hint) 18%, transparent); }
+  nav::-webkit-scrollbar { display: none; }
+  nav button { flex: none; padding: 8px 14px; border-radius: 999px; background: var(--bg2);
+    font-size: 14px; white-space: nowrap; transition: background .15s, color .15s; }
+  nav button.active { background: var(--accent); color: var(--accent-text); }
+
+  /* Блюда */
+  section { padding: 0 12px; }
+  section h2 { margin: 22px 4px 10px; font-size: 19px; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  @media (min-width: 560px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .dish { background: var(--card); border-radius: var(--radius); overflow: hidden;
+    display: flex; flex-direction: column; }
+  .photo { position: relative; aspect-ratio: 4 / 3; background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, var(--bg2)), var(--bg2));
+    display: grid; place-items: center; font-size: 42px; }
+  .photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .code { position: absolute; top: 8px; left: 8px; z-index: 1; background: rgba(0,0,0,.62);
+    color: #fff; font-weight: 700; font-size: 13px; padding: 3px 8px; border-radius: 8px; }
+  .info { padding: 10px 10px 4px; flex: 1; }
+  .name { font-weight: 600; }
+  .desc { color: var(--hint); font-size: 12.5px; margin-top: 3px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .buy { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 10px; gap: 6px; }
+  .price { font-weight: 700; }
+  .add { background: var(--accent); color: var(--accent-text); border-radius: 10px;
+    width: 36px; height: 34px; font-size: 22px; line-height: 1; }
+  .qty { display: flex; align-items: center; background: var(--bg2); border-radius: 10px; }
+  .qty button { width: 32px; height: 34px; font-size: 20px; color: var(--accent); }
+  .qty span { min-width: 18px; text-align: center; font-weight: 700; }
+  .empty { text-align: center; color: var(--hint); padding: 40px 16px; }
+
+  /* Нижняя панель */
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; padding: 10px 12px
+    calc(10px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, var(--bg2) 30%); }
+  .bar button { width: 100%; display: flex; justify-content: space-between; align-items: center;
+    background: var(--accent); color: var(--accent-text); border-radius: 14px; padding: 15px 18px;
+    font-weight: 600; font-size: 16px; box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+  .bar button:disabled { background: var(--card); color: var(--hint); box-shadow: none; }
+
+  /* Корзина */
+  .page { padding: 16px 12px; }
+  .page h1 { font-size: 22px; margin: 4px 4px 14px; }
+  .box { background: var(--card); border-radius: var(--radius); padding: 4px 14px; margin-bottom: 14px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 12px 0; }
+  .row + .row { border-top: 1px solid color-mix(in srgb, var(--hint) 18%, transparent); }
+  .row .grow { flex: 1; min-width: 0; }
+  .row .sub { color: var(--hint); font-size: 13px; }
+  .total { display: flex; justify-content: space-between; font-weight: 700; font-size: 17px; padding: 14px 0; }
+  .label { color: var(--hint); font-size: 13px; text-transform: uppercase; letter-spacing: .4px; margin: 0 4px 8px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--bg2); border-radius: 12px; padding: 3px; margin: 12px 0; }
+  .seg button { padding: 10px; border-radius: 10px; font-weight: 600; }
+  .seg button.on { background: var(--card); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+  .field { width: 100%; padding: 13px 14px; border-radius: 12px; border: 0; outline: 0;
+    background: var(--bg2); color: var(--text); font: inherit; font-size: 17px; margin-bottom: 12px; }
+  .field::-webkit-inner-spin-button, .field::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .field[type=number] { -moz-appearance: textfield; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .chips button { padding: 10px 16px; border-radius: 12px; background: var(--bg2); font-weight: 600; }
+  .chips button.on { background: var(--accent); color: var(--accent-text); }
+  .link { display: block; width: 100%; text-align: center; padding: 14px; color: var(--accent); font-weight: 600; }
+
+  /* Экран для официанта */
+  .waiter { padding: 24px 16px; text-align: center; }
+  .waiter h1 { font-size: 20px; color: var(--hint); font-weight: 600; margin: 0 0 18px; }
+  .waiter .big { font-size: 34px; font-weight: 800; line-height: 1.5; }
+  .waiter .small { color: var(--hint); margin-top: 18px; text-align: left; }
+</style>
+</head>
+<body>
+
+<div id="menuView">
+  <header>
+    <h1 id="cafeName">Asia Mix</h1>
+    <p id="cafeHours"></p>
+    <label class="search">🔎<input id="search" type="search" placeholder="Название или номер блюда" autocomplete="off"></label>
+  </header>
+  <nav id="tabs"></nav>
+  <div id="sections"></div>
+  <div id="nothing" class="empty hidden">Ничего не нашлось 🤷</div>
+</div>
+
+<div id="cartView" class="page hidden">
+  <h1>Ваш заказ</h1>
+  <div class="box" id="cartList"></div>
+
+  <div class="label">Куда подать</div>
+  <div class="box" style="padding-bottom: 2px">
+    <div class="seg">
+      <button data-place="table" class="on">🍽 За столик</button>
+      <button data-place="room">🏨 В номер</button>
+    </div>
+    <input id="tableNo" class="field" type="number" inputmode="numeric" placeholder="Номер столика (есть на столе)">
+    <div id="roomChips" class="chips hidden"></div>
+  </div>
+  <button class="link" id="toWaiter">👨‍🍳 Показать официанту вместо отправки</button>
+</div>
+
+<div id="waiterView" class="waiter hidden">
+  <h1>Заказ для официанта</h1>
+  <div class="big" id="waiterCodes"></div>
+  <div class="small" id="waiterList"></div>
+</div>
+
+<div class="bar"><button id="mainBtn"><span id="mainLeft"></span><span id="mainRight"></span></button></div>
+
+<script>
+const tg = window.Telegram && Telegram.WebApp;
+const inTelegram = !!(tg && tg.initData);
+if (tg) { tg.ready(); tg.expand(); }
+if (inTelegram) document.documentElement.classList.add('tg');
+
+const $ = id => document.getElementById(id);
+const rub = n => n.toLocaleString('ru-RU') + ' ₽';
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const haptic = () => { try { tg.HapticFeedback.selectionChanged(); } catch (e) {} };
+
+let menu, items = {};
+let cart = {};
+let place = { type: 'table', no: '' };
+let view = 'menu';
+
+try { cart = JSON.parse(localStorage.getItem('asiamix-cart') || '{}'); } catch (e) {}
+const save = () => { try { localStorage.setItem('asiamix-cart', JSON.stringify(cart)); } catch (e) {} };
+
+const EMOJI = ['🍣', '🍜', '🍛', '🥟', '🍹', '🥢', '🍤', '🍱'];
+
+async function load() {
+  menu = await (await fetch('menu.json', { cache: 'no-cache' })).json();
+  $('cafeName').textContent = menu.cafe.name;
+  $('cafeHours').textContent = menu.cafe.hours;
+  menu.categories.forEach((c, ci) => c.items.forEach(d => { items[d.code] = { ...d, emoji: EMOJI[ci % EMOJI.length] }; }));
+  for (const code of Object.keys(cart)) if (!items[code]) delete cart[code];
+  renderMenu();
+  renderRooms();
+  update();
+}
+
+function renderMenu() {
+  $('tabs').innerHTML = menu.categories.map((c, i) =>
+    `<button data-cat="${i}" class="${i === 0 ? 'active' : ''}">${esc(c.title)}</button>`).join('');
+  $('sections').innerHTML = menu.categories.map((c, i) => `
+    <section id="cat${i}" data-cat="${i}">
+      <h2>${esc(c.title)}</h2>
+      <div class="grid">${c.items.map(d => dishHtml(items[d.code])).join('')}</div>
+    </section>`).join('');
+}
+
+function dishHtml(d) {
+  return `<div class="dish" data-code="${d.code}" data-search="${esc((d.code + ' ' + d.name + ' ' + d.desc).toLowerCase())}">
+    <div class="photo"><span class="code">№${d.code}</span>${d.emoji}
+      ${d.photo ? `<img src="${esc(d.photo)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</div>
+    <div class="info"><div class="name">${esc(d.name)}</div><div class="desc">${esc(d.desc)}</div></div>
+    <div class="buy"><span class="price">${rub(d.price)}</span><span class="ctl"></span></div>
+  </div>`;
+}
+
+function ctlHtml(code) {
+  const q = cart[code] || 0;
+  return q ? `<span class="qty"><button data-act="dec" data-code="${code}">−</button><span>${q}</span><button data-act="inc" data-code="${code}">+</button></span>`
+           : `<button class="add" data-act="inc" data-code="${code}" aria-label="Добавить">+</button>`;
+}
+
+function renderRooms() {
+  $('roomChips').innerHTML = menu.rooms.map(r => `<button data-room="${esc(r)}">№${esc(r)}</button>`).join('');
+}
+
+function totals() {
+  let count = 0, sum = 0;
+  for (const [code, q] of Object.entries(cart)) { count += q; sum += q * items[code].price; }
+  return { count, sum };
+}
+
+const sortedCart = () => Object.entries(cart).sort((a, b) => +a[0] - +b[0]);
+
+function update() {
+  document.querySelectorAll('.dish').forEach(el => { el.querySelector('.ctl').innerHTML = ctlHtml(el.dataset.code); });
+  const { count, sum } = totals();
+  const btn = $('mainBtn');
+  if (view === 'menu') {
+    $('mainLeft').textContent = count ? `🛒 Корзина · ${count} шт.` : '🛒 Корзина пуста';
+    $('mainRight').textContent = count ? rub(sum) : '';
+    btn.disabled = !count;
+  } else if (view === 'cart') {
+    renderCart();
+    $('mainLeft').textContent = inTelegram ? '📤 Отправить заказ' : '📤 Отправить (только в Telegram)';
+    $('mainRight').textContent = rub(sum);
+    btn.disabled = !count || !place.no;
+  } else {
+    $('mainLeft').textContent = '⬅️ Вернуться к заказу';
+    $('mainRight').textContent = '';
+    btn.disabled = false;
+  }
+  save();
+}
+
+function renderCart() {
+  const rows = sortedCart();
+  if (!rows.length) { $('cartList').innerHTML = '<div class="empty">Корзина пуста</div>'; return; }
+  $('cartList').innerHTML = rows.map(([code, q]) => {
+    const d = items[code];
+    return `<div class="row"><div class="grow"><div class="name">№${code} ${esc(d.name)}</div>
+      <div class="sub">${rub(d.price)} × ${q} = ${rub(d.price * q)}</div></div>${ctlHtml(code)}</div>`;
+  }).join('') + `<div class="row total"><span>Итого</span><span>${rub(totals().sum)}</span></div>`;
+}
+
+function show(next) {
+  view = next;
+  $('menuView').classList.toggle('hidden', view !== 'menu');
+  $('cartView').classList.toggle('hidden', view !== 'cart');
+  $('waiterView').classList.toggle('hidden', view !== 'waiter');
+  if (view === 'waiter') {
+    const rows = sortedCart();
+    $('waiterCodes').innerHTML = rows.map(([c, q]) => `№${c} × ${q}`).join('<br>');
+    $('waiterList').innerHTML = rows.map(([c, q]) => `№${c} ${esc(items[c].name)} — ${rub(items[c].price * q)}`).join('<br>')
+      + `<br><b>Итого: ${rub(totals().sum)}</b>`;
+  }
+  if (tg && tg.BackButton) view === 'menu' ? tg.BackButton.hide() : tg.BackButton.show();
+  window.scrollTo(0, 0);
+  update();
+}
+
+function back() { show(view === 'waiter' ? 'cart' : 'menu'); }
+if (tg && tg.BackButton) tg.BackButton.onClick(back);
+
+// Плюс/минус в меню и корзине
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b) return;
+  const code = b.dataset.code;
+  cart[code] = (cart[code] || 0) + (b.dataset.act === 'inc' ? 1 : -1);
+  if (cart[code] <= 0) delete cart[code];
+  haptic();
+  update();
+});
+
+// Вкладки категорий
+$('tabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-cat]');
+  if (!b) return;
+  const sec = $('cat' + b.dataset.cat);
+  window.scrollTo({ top: sec.offsetTop - $('tabs').offsetHeight - 4, behavior: 'smooth' });
+});
+const spy = new IntersectionObserver(entries => {
+  entries.forEach(en => {
+    if (!en.isIntersecting) return;
+    document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.cat === en.target.dataset.cat));
+    const active = document.querySelector('#tabs .active');
+    if (active) active.scrollIntoView({ inline: 'center', block: 'nearest' });
+  });
+}, { rootMargin: '-45% 0px -50% 0px' });
+new MutationObserver(() => document.querySelectorAll('section').forEach(s => spy.observe(s)))
+  .observe($('sections'), { childList: true });
+
+// Поиск по названию или номеру
+$('search').addEventListener('input', e => {
+  const q = e.target.value.trim().toLowerCase();
+  let any = false;
+  document.querySelectorAll('section').forEach(sec => {
+    let shown = 0;
+    sec.querySelectorAll('.dish').forEach(d => {
+      const ok = !q || (/^\d+$/.test(q) ? d.dataset.code === q : d.dataset.search.includes(q));
+      d.classList.toggle('hidden', !ok);
+      if (ok) shown++;
+    });
+    sec.classList.toggle('hidden', !shown);
+    any = any || shown > 0;
+  });
+  $('nothing').classList.toggle('hidden', any);
+  $('tabs').classList.toggle('hidden', !!q);
+});
+
+// Куда подать
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+  place = { type: b.dataset.place, no: '' };
+  document.querySelectorAll('.seg button').forEach(x => x.classList.toggle('on', x === b));
+  $('tableNo').classList.toggle('hidden', place.type !== 'table');
+  $('roomChips').classList.toggle('hidden', place.type !== 'room');
+  $('tableNo').value = '';
+  document.querySelectorAll('#roomChips button').forEach(x => x.classList.remove('on'));
+  update();
+}));
+$('tableNo').addEventListener('input', e => {
+  const v = e.target.value.replace(/\D/g, '').slice(0, 3);
+  place.no = v && +v > 0 ? String(+v) : '';
+  update();
+});
+$('roomChips').addEventListener('click', e => {
+  const b = e.target.closest('[data-room]');
+  if (!b) return;
+  place.no = b.dataset.room;
+  document.querySelectorAll('#roomChips button').forEach(x => x.classList.toggle('on', x === b));
+  update();
+});
+
+$('toWaiter').addEventListener('click', () => show('waiter'));
+
+// Главная кнопка
+$('mainBtn').addEventListener('click', () => {
+  if (view === 'menu') return show('cart');
+  if (view === 'waiter') return show('cart');
+  if (!inTelegram) { alert('Отправка работает только внутри Telegram'); return; }
+  const order = { v: 1, items: Object.fromEntries(sortedCart()), place: place.type, place_no: place.no };
+  cart = {}; save();
+  tg.sendData(JSON.stringify(order));  // бот получит заказ и закроет приложение
+});
+
+load().catch(err => {
+  $('sections').innerHTML = `<div class="empty">Не удалось загрузить меню 😔<br><small>${esc(err.message)}</small></div>`;
+});
+</script>
+</body>
+</html>
